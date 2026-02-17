@@ -1,0 +1,12 @@
+[package]
+name = "egui-playground"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.33.3"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+walkdir = "2.5.0"
+syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
+similar = "2.6"
