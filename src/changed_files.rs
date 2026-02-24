@@ -13,9 +13,9 @@ impl FileStatus {
     fn symbol(&self) -> &'static str {
         match self {
             FileStatus::Added => "+",
-            FileStatus::Modified => "●",
-            FileStatus::Deleted => "✕",
-            FileStatus::Renamed => "→",
+            FileStatus::Modified => "~",
+            FileStatus::Deleted => "x",
+            FileStatus::Renamed => "~>",
         }
     }
 

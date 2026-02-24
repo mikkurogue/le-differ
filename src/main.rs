@@ -9,7 +9,6 @@ use crate::theme::set_rusty_theme;
 
 mod changed_files;
 mod diff_viewer;
-mod sidebar_item;
 mod theme;
 mod title_bar;
 

@@ -2,7 +2,7 @@ use eframe::egui::{self, Color32, RichText, ScrollArea};
 use similar::{ChangeTag, TextDiff};
 use std::path::Path;
 use std::process::Command;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
@@ -399,9 +399,12 @@ fn get_jj_file_content(path: &str) -> String {
     }
 }
 
+/// Number of context lines to show around changes
+const CONTEXT_LINES: usize = 3;
+
 fn compute_diff(old: &str, new: &str) -> Vec<DiffLineRaw> {
     let diff = TextDiff::from_lines(old, new);
-    let mut lines = Vec::new();
+    let mut all_lines = Vec::new();
     let mut old_line_num = 1usize;
     let mut new_line_num = 1usize;
 
@@ -426,7 +429,7 @@ fn compute_diff(old: &str, new: &str) -> Vec<DiffLineRaw> {
             }
         };
 
-        lines.push(DiffLineRaw {
+        all_lines.push(DiffLineRaw {
             old_line_num: old_num,
             new_line_num: new_num,
             content: change.value().trim_end_matches('\n').to_string(),
@@ -434,7 +437,69 @@ fn compute_diff(old: &str, new: &str) -> Vec<DiffLineRaw> {
         });
     }
 
-    lines
+    // Filter to only show chunks with context
+    filter_to_chunks(&all_lines)
+}
+
+/// Filter diff lines to only show changed lines and surrounding context
+fn filter_to_chunks(lines: &[DiffLineRaw]) -> Vec<DiffLineRaw> {
+    if lines.is_empty() {
+        return Vec::new();
+    }
+
+    // Find indices of all changed lines
+    let changed_indices: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.change_type != ChangeTag::Equal)
+        .map(|(i, _)| i)
+        .collect();
+
+    if changed_indices.is_empty() {
+        // No changes, return empty
+        return Vec::new();
+    }
+
+    let mut include_line_chunks = std::collections::HashSet::new();
+
+    for &idx in &changed_indices {
+        let start = idx.saturating_sub(CONTEXT_LINES);
+        let end = (idx + CONTEXT_LINES + 1).min(lines.len());
+        for i in start..end {
+            include_line_chunks.insert(i);
+        }
+    }
+
+    // Build result with chunk separators
+    let mut result = Vec::new();
+    let mut in_chunk = false;
+    let mut last_included_idx: Option<usize> = None;
+
+    for (i, line) in lines.iter().enumerate() {
+        if include_line_chunks.get(&i).is_some() {
+            if let Some(last) = last_included_idx {
+                // check if gap between lines, as if there is a gap then its the new chunk
+                if i > last + 1 && in_chunk {
+                    result.push(DiffLineRaw {
+                        old_line_num: None,
+                        new_line_num: None,
+                        content: "─────────────────────────────────────".to_string(),
+                        change_type: ChangeTag::Equal,
+                    });
+                }
+            }
+            result.push(DiffLineRaw {
+                old_line_num: line.old_line_num,
+                new_line_num: line.new_line_num,
+                content: line.content.clone(),
+                change_type: line.change_type,
+            });
+            last_included_idx = Some(i);
+            in_chunk = true;
+        }
+    }
+
+    result
 }
 
 fn split_for_side_by_side(diff_lines: &[DiffLineRaw]) -> (Vec<DiffLineRaw>, Vec<DiffLineRaw>) {
